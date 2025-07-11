@@ -6,16 +6,22 @@ export interface User {
 
 export interface Connection {
   id: string;
-  // Personal Information
-  first_name: string;
-  last_name: string;
+  profile_id?: string;
+  similarity_score?: number;
+  
+  // Personal Information (from Pinecone comprehensive data)
+  name?: string; // Combined name from Pinecone
+  first_name?: string; // Legacy field for backward compatibility
+  last_name?: string; // Legacy field for backward compatibility
   linkedin_url?: string | null;
-  email_address?: string | null;
+  email?: string | null;
+  email_address?: string | null; // Legacy field
   city?: string | null;
   state?: string | null;
   country?: string | null;
   followers?: string | null;
   description?: string | null;
+  canonical_text?: string; // Full text used for embedding
   
   // Connection Information
   connected_on?: string | null;
@@ -24,20 +30,23 @@ export interface Connection {
   company?: string | null;
   title?: string | null;
   
-  // Company Details
+  // Company Details (comprehensive from Pinecone)
   company_size?: string | null;
   company_name?: string | null;
   company_website?: string | null;
   company_phone?: string | null;
-  company_industry?: string | null;
-  company_industry_topics?: string | null;
+  industry?: string | null; // From Pinecone
+  company_industry?: string | null; // Legacy field
+  company_topics?: string | null; // From Pinecone
+  company_industry_topics?: string | null; // Legacy field
   company_description?: string | null;
   company_address?: string | null;
   company_city?: string | null;
   company_state?: string | null;
   company_country?: string | null;
   company_revenue?: string | null;
-  company_latest_funding?: string | null;
+  company_funding?: string | null; // From Pinecone
+  company_latest_funding?: string | null; // Legacy field
   company_linkedin?: string | null;
 }
 

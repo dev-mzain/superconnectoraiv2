@@ -9,6 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '../../../src/components/ui/badge';
 import { User, Linkedin, Loader2 } from 'lucide-react';
 
+// Helper function to check if a value is valid (not null, undefined, empty, or "nan")
+const isValidValue = (value: any): boolean => {
+  return value && value !== 'nan' && value !== 'null' && value !== 'undefined' && value.toString().trim() !== '';
+};
+
 export default function DashboardPage() {
   const { token } = useAuth();
   const [query, setQuery] = useState('');
@@ -112,20 +117,35 @@ export default function DashboardPage() {
                       {/* Name and title */}
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">
-                          {result.connection.first_name} {result.connection.last_name}
+                          {result.connection.name || `${result.connection.first_name || ''} ${result.connection.last_name || ''}`.trim() || 'Unknown Name'}
                         </h3>
                         <p className="text-gray-600">
-                          {result.connection.title && result.connection.company ? (
-                            `${result.connection.title} at ${result.connection.company}`
-                          ) : result.connection.title || result.connection.company || (
-                            'No company information available'
-                          )}
+                          {(() => {
+                            const title = isValidValue(result.connection.title) ? result.connection.title : null;
+                            const company = isValidValue(result.connection.company) ? result.connection.company : null;
+                            
+                            if (title && company) {
+                              return `${title} at ${company}`;
+                            } else if (title) {
+                              return title;
+                            } else if (company) {
+                              return company;
+                            } else {
+                              return 'No company information available';
+                            }
+                          })()}
                         </p>
-                        {result.connection.email_address && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            📧 {result.connection.email_address}
-                          </p>
-                        )}
+                        {(() => {
+                          const email = isValidValue(result.connection.email) ? result.connection.email : null;
+                          const emailAddress = isValidValue(result.connection.email_address) ? result.connection.email_address : null;
+                          const displayEmail = email || emailAddress;
+                          
+                          return displayEmail ? (
+                            <p className="text-xs text-gray-500 mt-1">
+                              📧 {displayEmail}
+                            </p>
+                          ) : null;
+                        })()}
                         {result.connection.connected_on && (
                           <p className="text-sm text-gray-500 mt-1">
                             Connected on {new Date(result.connection.connected_on).toLocaleDateString('en-US', {
@@ -193,10 +213,16 @@ export default function DashboardPage() {
 
                   {/* Send Email Button */}
                   <Button
-                    onClick={() => handleEmailConnection(
-                      result.connection.email_address,
-                      `${result.connection.first_name} ${result.connection.last_name}`
-                    )}
+                    onClick={() => {
+                      const email = isValidValue(result.connection.email) ? result.connection.email : null;
+                      const emailAddress = isValidValue(result.connection.email_address) ? result.connection.email_address : null;
+                      const displayEmail = email || emailAddress;
+                      
+                      const name = isValidValue(result.connection.name) ? result.connection.name! :
+                        `${result.connection.first_name || ''} ${result.connection.last_name || ''}`.trim() || 'Unknown Name';
+                      
+                      handleEmailConnection(displayEmail, name);
+                    }}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     Send Email
