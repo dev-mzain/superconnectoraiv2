@@ -51,8 +51,8 @@ class RetrievalService:
             
         # Configuration constants
         self.TOTAL_TOKEN_LIMIT = 128000
-        self.ESTIMATED_PROMPT_TOKENS = 500  # Conservative estimate for system prompt + user query
-        self.ESTIMATED_AVG_PROFILE_TOKENS = 200  # Conservative estimate per profile
+        self.ESTIMATED_PROMPT_TOKENS = 1000  # More realistic estimate for system prompt + user query
+        self.ESTIMATED_AVG_PROFILE_TOKENS = 800  # More realistic estimate per comprehensive profile
         
     async def rewrite_query_with_llm(self, verbose_query: str, enable_rewrite: bool = True) -> str:
         """
@@ -99,15 +99,15 @@ Keep the output to 1-2 sentences maximum."""
             return verbose_query
     
     async def hybrid_pinecone_query(
-        self, 
-        vector: List[float], 
-        top_k: int = 600, 
-        alpha: float = 0.6, 
+        self,
+        vector: List[float],
+        top_k: int = 600,
+        alpha: float = 0.6,
         filter_dict: Optional[Dict[str, Any]] = None,
         namespace: str = "default_user"
-    ) -> List[str]:
+    ) -> List[Dict[str, Any]]:
         """
-        Perform hybrid search query on Pinecone index.
+        Perform hybrid search query on Pinecone index and return full profile data.
         
         Args:
             vector: Dense embedding of the search query
@@ -117,7 +117,7 @@ Keep the output to 1-2 sentences maximum."""
             namespace: Namespace for tenant isolation
             
         Returns:
-            List of profile IDs from the query response
+            List of profile dictionaries with comprehensive data from Pinecone metadata
         """
         if not self.index:
             raise ValueError("Pinecone client not initialized. Please check PINECONE_API_KEY configuration.")
@@ -142,13 +142,20 @@ Keep the output to 1-2 sentences maximum."""
             # Execute the query
             query_response = self.index.query(**query_params)
             
-            # Extract profile IDs from matches
-            profile_ids = []
+            # Extract full profile data from matches
+            profiles = []
             for match in query_response.matches:
-                profile_ids.append(match.id)
+                # Create profile dict from Pinecone metadata
+                profile = {
+                    "id": match.id,
+                    "profile_id": match.id,
+                    "similarity_score": match.score,  # Pinecone similarity score
+                    **match.metadata  # All the comprehensive metadata we stored
+                }
+                profiles.append(profile)
                 
-            print(f"Retrieved {len(profile_ids)} profile IDs from Pinecone")
-            return profile_ids
+            print(f"Retrieved {len(profiles)} complete profiles from Pinecone (no MongoDB fetch needed)")
+            return profiles
             
         except Exception as e:
             print(f"Error performing hybrid Pinecone query: {e}")
@@ -166,7 +173,8 @@ Keep the output to 1-2 sentences maximum."""
         chunk_size = math.floor(available_tokens / self.ESTIMATED_AVG_PROFILE_TOKENS)
         
         # Ensure minimum chunk size of 1 and reasonable maximum
-        chunk_size = max(1, min(chunk_size, 100))
+        # With our optimized token estimates: (128000-1000)/800 = ~158 profiles
+        chunk_size = max(1, min(chunk_size, 150))
         
         print(f"Calculated chunk size: {chunk_size} profiles per batch")
         return chunk_size
@@ -214,7 +222,14 @@ Keep the output to 1-2 sentences maximum."""
         if not candidates:
             return []
             
-        chunk_size = self.calculate_chunk_size()
+        # For small result sets (≤ 50), process all at once to avoid unnecessary API calls
+        if len(candidates) <= 50:
+            chunk_size = len(candidates)
+            print(f"Small result set ({len(candidates)} profiles) - processing all in one API call")
+        else:
+            chunk_size = self.calculate_chunk_size()
+            print(f"Large result set ({len(candidates)} profiles) - using calculated chunk size: {chunk_size}")
+        
         all_results = []
         
         # Process candidates in chunks
@@ -321,8 +336,12 @@ Example format:
         # Sort by score descending
         all_results.sort(key=lambda x: x["score"], reverse=True)
         
+        # Filter results to only include scores of 5 or greater
+        filtered_results = [result for result in all_results if result["score"] >= 5]
+        
         print(f"Re-ranked {len(all_results)} profiles using OpenAI")
-        return all_results
+        print(f"Filtered to {len(filtered_results)} profiles with scores >= 5")
+        return filtered_results
     
     async def fetch_profile_data(self, profile_ids: List[str], user_id: str) -> List[Dict[str, Any]]:
         """
@@ -367,10 +386,10 @@ Example format:
             return []
     
     async def retrieve_and_rerank(
-        self, 
-        user_query: str, 
+        self,
+        user_query: str,
         user_id: str = "default_user",
-        enable_query_rewrite: bool = True,
+        enable_query_rewrite: bool = False,  # Disabled by default to reduce API calls
         filter_dict: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -388,14 +407,14 @@ Example format:
         try:
             print(f"Starting retrieval and re-ranking for query: '{user_query}'")
             
-            # Step 1: Optional query rewrite
+            # Step 1: Optional query rewrite (disabled by default to reduce API calls)
             processed_query = await self.rewrite_query_with_llm(user_query, enable_query_rewrite)
             
             # Step 2: Generate embedding for the query
             query_embedding = await embeddings_service.generate_embedding(processed_query)
             
-            # Step 3: Execute hybrid query against Pinecone
-            profile_ids = await self.hybrid_pinecone_query(
+            # Step 3: Execute hybrid query against Pinecone (now returns full profile data)
+            candidate_profiles = await self.hybrid_pinecone_query(
                 vector=query_embedding,
                 top_k=30,
                 alpha=0.6,
@@ -403,24 +422,20 @@ Example format:
                 namespace=user_id
             )
             
-            if not profile_ids:
+            if not candidate_profiles:
                 print("No profiles found in Pinecone query")
                 return []
             
-            # Step 4: Fetch full profile data for candidates
-            candidate_profiles = await self.fetch_profile_data(profile_ids, user_id)
+            # Step 4: MongoDB fetch is no longer needed - we have all data from Pinecone!
+            print(f"Using {len(candidate_profiles)} profiles directly from Pinecone (MongoDB fetch skipped)")
             
-            if not candidate_profiles:
-                print("No full profile data found for candidates")
-                return []
-            
-            # Step 5: Chunk and re-rank candidates using OpenAI
+            # Step 5: Chunk and re-rank candidates using OpenAI (now includes score filtering >= 5)
             reranked_results = await self.rerank_with_openai(candidate_profiles, user_query)
             
-            # Step 6: Limit results to top 20
+            # Step 6: Limit results to top 20 (from already filtered results with scores >= 5)
             final_results = reranked_results[:20]
             
-            print(f"Retrieval and re-ranking completed. Returning {len(final_results)} results (limited from {len(reranked_results)})")
+            print(f"Retrieval and re-ranking completed. Returning {len(final_results)} high-quality results (scores >= 5)")
             return final_results
             
         except Exception as e:

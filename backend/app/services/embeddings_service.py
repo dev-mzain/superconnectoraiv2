@@ -53,22 +53,107 @@ class EmbeddingsService:
         self.embedding_model = "text-embedding-3-small"
         self.batch_size = 500
         
-    def canonicalize_profile_text(self, name: str, headline: str, experience: str, skills: str, location: str) -> str:
+    def canonicalize_profile_text(self, row: pd.Series) -> str:
         """
-        Canonicalize profile text by merging fields into a clean string.
+        Canonicalize profile text by merging ALL available fields into a comprehensive string.
         
         Args:
-            name: User's name
-            headline: User's headline/title
-            experience: User's experience description
-            skills: User's skills
-            location: User's location
+            row: Pandas Series representing a row from the CSV with all fields
             
         Returns:
-            Canonicalized text string
+            Canonicalized text string containing all available information
         """
+        # Extract all available fields from the CSV
+        fields = []
+        
+        # Personal information
+        name = f"{row.get('FirstName', '')} {row.get('LastName', '')}".strip()
+        if name and name != " ":
+            fields.append(f"Name: {name}")
+            
+        title = str(row.get('Title', '')).strip()
+        if title:
+            fields.append(f"Title: {title}")
+            
+        description = str(row.get('Description/0', '')).strip()
+        if description:
+            fields.append(f"Description: {description}")
+            
+        # Location information
+        location_parts = []
+        for loc_field in ['City', 'State', 'Country']:
+            loc_value = str(row.get(loc_field, '')).strip()
+            if loc_value:
+                location_parts.append(loc_value)
+        if location_parts:
+            fields.append(f"Location: {', '.join(location_parts)}")
+            
+        # Company information
+        company = str(row.get('Company', '')).strip()
+        if company:
+            fields.append(f"Company: {company}")
+            
+        company_name = str(row.get('CompanyName', '')).strip()
+        if company_name and company_name != company:
+            fields.append(f"Company Name: {company_name}")
+            
+        company_industry = str(row.get('CompanyIndustry', '')).strip()
+        if company_industry:
+            fields.append(f"Industry: {company_industry}")
+            
+        company_size = str(row.get('Company size', '')).strip()
+        if company_size:
+            fields.append(f"Company Size: {company_size}")
+            
+        company_description = str(row.get('CompanyDescription', '')).strip()
+        if company_description:
+            fields.append(f"Company Description: {company_description}")
+            
+        company_topics = str(row.get('CompanyIndustryTopics', '')).strip()
+        if company_topics:
+            fields.append(f"Company Topics: {company_topics}")
+            
+        # Company location
+        company_location_parts = []
+        for comp_loc_field in ['CompanyCity/0', 'CompanyState/0', 'CompanyCountry/0']:
+            comp_loc_value = str(row.get(comp_loc_field, '')).strip()
+            if comp_loc_value:
+                company_location_parts.append(comp_loc_value)
+        if company_location_parts:
+            fields.append(f"Company Location: {', '.join(company_location_parts)}")
+            
+        # Additional company details
+        company_website = str(row.get('CompanyWebsite', '')).strip()
+        if company_website:
+            fields.append(f"Company Website: {company_website}")
+            
+        company_revenue = str(row.get('CompanyRevenue', '')).strip()
+        if company_revenue:
+            fields.append(f"Company Revenue: {company_revenue}")
+            
+        company_funding = str(row.get('CompanyLatestFunding/0', '')).strip()
+        if company_funding:
+            fields.append(f"Company Latest Funding: {company_funding}")
+            
+        # Contact and social information
+        email = str(row.get('Email Address', '')).strip()
+        if email:
+            fields.append(f"Email: {email}")
+            
+        linkedin_url = str(row.get('LinkedinUrl', '')).strip()
+        if linkedin_url:
+            fields.append(f"LinkedIn: {linkedin_url}")
+            
+        followers = str(row.get('Followers', '')).strip()
+        if followers:
+            fields.append(f"Followers: {followers}")
+            
+        connected_on = str(row.get('Connected On', '')).strip()
+        if connected_on:
+            fields.append(f"Connected On: {connected_on}")
+        
         # Combine all fields
-        combined_text = f"{name} {headline} {experience} {skills} {location}"
+        combined_text = " | ".join(fields)
         
         # Remove HTML tags
         soup = BeautifulSoup(combined_text, 'html.parser')
@@ -273,21 +358,102 @@ class EmbeddingsService:
     
     def extract_metadata(self, row: pd.Series) -> Dict[str, Any]:
         """
-        Extract metadata from a CSV row according to the specified schema.
+        Extract comprehensive metadata from a CSV row.
         
         Args:
             row: Pandas Series representing a row from the CSV
             
         Returns:
-            Metadata dictionary
+            Comprehensive metadata dictionary with all available fields
         """
-        return {
-            "industry": str(row.get("CompanyIndustry", "")).strip() or None,
-            "size": str(row.get("Company size", "")).strip() or None,
-            "city": str(row.get("City", "")).strip() or None,
-            "followers": str(row.get("Followers", "")).strip() or None,
-            "connected_on": str(row.get("Connected On", "")).strip() or None
-        }
+        metadata = {}
+        
+        # Personal information
+        name = f"{row.get('FirstName', '')} {row.get('LastName', '')}".strip()
+        if name and name != " ":
+            metadata["name"] = name
+            
+        title = str(row.get("Title", "")).strip()
+        if title:
+            metadata["title"] = title
+            
+        # Location information
+        city = str(row.get("City", "")).strip()
+        if city:
+            metadata["city"] = city
+            
+        state = str(row.get("State", "")).strip()
+        if state:
+            metadata["state"] = state
+            
+        country = str(row.get("Country", "")).strip()
+        if country:
+            metadata["country"] = country
+            
+        # Company information
+        company = str(row.get("Company", "")).strip()
+        if company:
+            metadata["company"] = company
+            
+        company_name = str(row.get("CompanyName", "")).strip()
+        if company_name:
+            metadata["company_name"] = company_name
+            
+        industry = str(row.get("CompanyIndustry", "")).strip()
+        if industry:
+            metadata["industry"] = industry
+            
+        company_size = str(row.get("Company size", "")).strip()
+        if company_size:
+            metadata["company_size"] = company_size
+            
+        company_topics = str(row.get("CompanyIndustryTopics", "")).strip()
+        if company_topics:
+            metadata["company_topics"] = company_topics
+            
+        # Company location
+        company_city = str(row.get("CompanyCity/0", "")).strip()
+        if company_city:
+            metadata["company_city"] = company_city
+            
+        company_state = str(row.get("CompanyState/0", "")).strip()
+        if company_state:
+            metadata["company_state"] = company_state
+            
+        company_country = str(row.get("CompanyCountry/0", "")).strip()
+        if company_country:
+            metadata["company_country"] = company_country
+            
+        # Additional details
+        followers = str(row.get("Followers", "")).strip()
+        if followers:
+            metadata["followers"] = followers
+            
+        connected_on = str(row.get("Connected On", "")).strip()
+        if connected_on:
+            metadata["connected_on"] = connected_on
+            
+        email = str(row.get("Email Address", "")).strip()
+        if email:
+            metadata["email"] = email
+            
+        linkedin_url = str(row.get("LinkedinUrl", "")).strip()
+        if linkedin_url:
+            metadata["linkedin_url"] = linkedin_url
+            
+        company_website = str(row.get("CompanyWebsite", "")).strip()
+        if company_website:
+            metadata["company_website"] = company_website
+            
+        company_revenue = str(row.get("CompanyRevenue", "")).strip()
+        if company_revenue:
+            metadata["company_revenue"] = company_revenue
+            
+        company_funding = str(row.get("CompanyLatestFunding/0", "")).strip()
+        if company_funding:
+            metadata["company_funding"] = company_funding
+        
+        return metadata
     
     async def process_profiles_and_upsert(self, csv_path: str = "Connections.csv", user_id: str = "default_user", chunk_size: int = 100) -> Dict[str, Any]:
         """
@@ -328,12 +494,8 @@ class EmbeddingsService:
                     # First pass: extract and validate profile data
                     for index, row in chunk_df.iterrows():
                         try:
-                            # Extract profile information
+                            # Extract profile information for validation
                             name = f"{row.get('FirstName', '')} {row.get('LastName', '')}".strip()
-                            headline = str(row.get('Title', '')).strip()
-                            experience = str(row.get('Description/0', '')).strip()
-                            skills = ""  # Not available in current CSV structure
-                            location = f"{row.get('City', '')} {row.get('State', '')} {row.get('Country', '')}".strip()
                             
                             # Skip if essential data is missing
                             if not name or name == " ":
@@ -343,14 +505,8 @@ class EmbeddingsService:
                             linkedin_url = str(row.get('LinkedinUrl', '')).strip()
                             profile_id = linkedin_url if linkedin_url else f"profile_{index}"
                             
-                            # Canonicalize profile text
-                            canonical_text = self.canonicalize_profile_text(
-                                name=name,
-                                headline=headline,
-                                experience=experience,
-                                skills=skills,
-                                location=location
-                            )
+                            # Canonicalize profile text using the new comprehensive function
+                            canonical_text = self.canonicalize_profile_text(row)
                             
                             # Skip if canonical text is too short
                             if len(canonical_text.strip()) < 10:
@@ -361,7 +517,6 @@ class EmbeddingsService:
                             if cached_embedding:
                                 # Use cached embedding
                                 metadata = self.extract_metadata(row)
-                                metadata["name"] = name
                                 metadata["canonical_text"] = canonical_text
                                 chunk_vectors.append((profile_id, cached_embedding, metadata))
                                 chunk_processed_count += 1
@@ -400,7 +555,6 @@ class EmbeddingsService:
                                 
                                 # Extract metadata
                                 metadata = self.extract_metadata(item['row'])
-                                metadata["name"] = item['name']
                                 metadata["canonical_text"] = item['canonical_text']
                                 
                                 # Add to chunk vectors list

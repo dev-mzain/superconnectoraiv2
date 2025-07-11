@@ -65,7 +65,7 @@ async def ai_search_connections(
         reranked_results = await retrieval_service.retrieve_and_rerank(
             user_query=search_request.query,
             user_id=user_id,
-            enable_query_rewrite=True,
+            enable_query_rewrite=False,  # Disabled to reduce API calls
             filter_dict=filter_dict
         )
         
@@ -141,7 +141,7 @@ async def ai_search_connections_stream(
             reranked_results = await retrieval_service.retrieve_and_rerank(
                 user_query=search_request.query,
                 user_id=user_id,
-                enable_query_rewrite=True,
+                enable_query_rewrite=False,  # Disabled to reduce API calls
                 filter_dict=filter_dict
             )
             
