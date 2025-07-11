@@ -10,8 +10,11 @@ import { Badge } from '../../../src/components/ui/badge';
 import { User, Linkedin, Loader2 } from 'lucide-react';
 
 // Helper function to check if a value is valid (not null, undefined, empty, or "nan")
-const isValidValue = (value: any): boolean => {
-  return value && value !== 'nan' && value !== 'null' && value !== 'undefined' && value.toString().trim() !== '';
+const isValidValue = (value: unknown): boolean => {
+  if (!value) return false;
+  if (typeof value !== 'string' && typeof value !== 'number') return false;
+  const stringValue = value.toString();
+  return stringValue !== 'nan' && stringValue !== 'null' && stringValue !== 'undefined' && stringValue.trim() !== '';
 };
 
 export default function DashboardPage() {
